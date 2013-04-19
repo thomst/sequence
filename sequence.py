@@ -15,94 +15,6 @@ from daytime import DayTime
 LOGGER = logging.getLogger('sequenz')
 
 
-
-class Interval:
-    """
-    An Interval-object is needed by the Timer-class.
-    
-    Every object that provides a get-method returning the interval in seconds
-    as an integer suits as an interval-object for a timer.
-    
-    The Idea of an extra-class for the interval is, that it makes the
-    implementation of complex dynamical interval-evaluation possible. The timer
-    actualizes the interval every round and calls therefore the interval's get-
-    method. It is up to this method to provide an anyway modulated interval.
-    
-    This class just suites as a static interval, that returns what it was
-    initialized with.
-    """
-    def __init__(self, interval_data):
-        """
-        Constructor of Interval.
-        
-        Args:
-            interval_data:  must be an int. Used as interval.
-        """
-        self._interval_data = interval_data
-
-    def get(self, timer):
-        """
-        Returns the actual interval.
-        
-        Args:
-            timer:  Timer-instance.
-        """
-        return self._interval_data
-
-
-class DaytimeInterval:
-    """
-    A more advanced interval-class.
-    
-    Interval-evaluation based on a list of daytimes.
-    """
-    #TODO: reworking this. Take a dict as argument.
-    def __init__(self, interval_data):
-        """
-        Constructor of DaytimeInterval.
-        
-        Args:
-            interval_data:  either the interval as int, or a list of strings
-                            and ints in alteration. The Strings will be parsed
-                            as daytimes with the format '%H:%M', while the
-                            following int means the interval that is used from
-                            that daytime on.
-        
-        Raises:
-            ValueError  if the interval_data is a list with uneven members.
-            TypeError   if the data is neither an int nor a list.
-        """
-        if type(interval_data) is int:
-            self._interval_data = interval_data
-        elif type(interval_data) is list:
-            try:
-                self._interval_data = list()
-                for i in range(len(interval_data)/2):
-                    daytime = DayTime.strptime(interval_data[i*2], '%H:%M')
-                    interval = interval_data[i*2+1]
-                    self._interval_data.append((daytime, interval))
-                self._interval_data.sort()
-                self._interval_data.reverse()
-            except IndexError:
-                raise ValueError('no a valid time-interval-list')
-        else: raise TypeError('interval_data need to be int or list')
-
-    def get(self, timer):
-        """
-        Evaluates and returns the actual interval.
-        
-        Args:
-            timer:  Timer-instance.
-        """
-        if type(self._interval_data) is int:
-            return self._interval_data
-        elif DayTime.daytime() < self._interval_data[-1][0]:
-            return self._interval_data[0][1]
-        else:
-            for daytime, interval in self._interval_data:
-                if daytime < DayTime.daytime(): return interval
-
-
 class Timer:
     """
     Provides timer-facilities regarding to the needs of Sequenz-class.
@@ -116,13 +28,13 @@ class Timer:
                     (defaults to 0.01).
 
     """
-    def __init__(self, intervalobj, snap=False, max_count=None, latency_tolerance=0.01):
+    def __init__(self, interval_data, snap=False, max_count=None, latency_tolerance=0.01):
         """
         Constructor of Timer.
         
         Args:
-            intervalobj:
-                Interval-instance.
+            interval_data:
+                Data to generate the interval (s.a. self.actualize).
 
             snap:
                 a boolean specifies if the timer-start will be instantly or
@@ -137,8 +49,8 @@ class Timer:
         
         Returns a Timer-instance.
         """
-        self._intervalobj = intervalobj
-        self._actualize_interval()
+        self._data = interval_data
+        self._interval = None
         self._snap = snap
         self._max_count = max_count
         self._latency_tolerance = latency_tolerance
@@ -179,10 +91,15 @@ class Timer:
         if self.alive: return time.time() - self._stage
         else: return None
 
-    def _actualize_interval(self):
-        #TODO: what about snapping if the interval changes!
-        #TODO: this method should be part of the Interval-class.
-        self._interval = self._intervalobj.get(self)
+    def actualize(self):
+        """
+        This is a hook for dynamical evaluation of intervals.
+
+        The initial interval_data will be processed to generate the interval
+        and save it as self._interval.
+        The method will be called once for each sequence.
+        """
+        self._interval = self._data
 
     def start(self):
         """
@@ -198,7 +115,7 @@ class Timer:
         returns True.
         Otherwise returns None.
         """
-        self._actualize_interval()
+        self.actualize()
         self._first_time = True
 
         if not self._snap:
@@ -229,7 +146,7 @@ class Timer:
 
         # if interval is 0:
         elif not self.interval:
-            self._actualize_interval()
+            self.actualize()
             if self.interval: time.sleep(self.start())
             else: return False
 
@@ -247,7 +164,7 @@ class Timer:
             lag = self.runtime - self._interval
             self._timelag = None if lag <= self._latency_tolerance else lag
 
-            self._actualize_interval()
+            self.actualize()
             if not self.interval: return False
 
             self._count += 1
@@ -276,6 +193,25 @@ class Timer:
         Stop the timer/sequenz as soon as all left cmds has been processed.
         """
         self._stopped = True
+
+
+class DaytimeTimer(Timer):
+    """
+    Extension of Timer.
+    
+    The constructor expects a sorted list of tuples with each tuple consisting of
+    a daytime and an interval. From each daytime on the particular interval will
+    be used.
+    """
+    def actualize(self):
+        """Actualizes the interval based on the actual daytime.
+        """
+        now = DayTime.daytime()
+        if now < self._data[-1][0]:
+            self._interval = self._data[0][1]
+        else:
+            for daytime, interval in self._data:
+                if daytime < now: self._interval = interval
 
 
 class Sequenz():
