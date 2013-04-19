@@ -10,142 +10,10 @@ import time
 import logging
 import datetime
 from threading import Thread
+from daytime import DayTime
 
 LOGGER = logging.getLogger('sequenz')
 
-
-
-
-class DayTime(datetime.time):
-    """
-    Compare, add or substract daytimes.
-    
-    This module extends the datetime.time-module and makes it more handy
-    respectivly to comparison, addition and substraction. Comparison as well as
-    doing sums are possible with either a DayTime-instance or an integer or
-    float as seconds (The outcome is always a DayTime-instance). Comparison also
-    works with datetime.time-instances.
-    
-    Attributes:
-        delta:          daytime as datetime.timedelta-instance
-        total_seconds:  daytime in seconds as a float
-
-    """
-
-    def __init__(self, *args, **kwargs):
-        """DayTime([hour[, minute[, second[, microsecond[, tzinfo]]]]])
-        """
-        super(DayTime, self).__init__(*args, **kwargs)
-        self._delta = datetime.timedelta(
-            hours = self.hour,
-            minutes = self.minute,
-            seconds = self.second
-            )
-        self._total_seconds = self._delta.total_seconds()
-
-    @property
-    def delta(self):
-        return self.delta
-
-    @property
-    def total_seconds(self):
-        return self._total_seconds
-
-    @classmethod
-    def from_struct_time(cls, struct_time):
-        """
-        Build a DayTime from a struct_time.
-        
-        Args:
-            struct_time:    time.struct_time (see the reference of time-module)
-        
-        Returns a DayTime-object.
-
-        """
-        return cls(
-            hour = struct_time.tm_hour,
-            minute = struct_time.tm_min,
-            second = struct_time.tm_sec
-            )
-
-    @classmethod
-    def from_seconds(cls, sec, local=True):
-        """
-        Build a DayTime from seconds.
-
-        Args:
-            sec:    integer or float. Interpreted as total amount of seconds
-                    since the epoch (see documentation of time-module).
-                    (Mind that to get the localized time in seconds you need to
-                    use time.time() - time.altzone.)
-            local:  boolean that specifies whether time.localtime or time.gmtime
-                    is used to construct the daytime.
-        
-        Returns a DayTime-object.
-
-        """
-        if local: struct_time = time.localtime(sec)
-        else: struct_time = time.gmtime(sec)
-        return cls.from_struct_time(struct_time)
-
-    @classmethod
-    def strptime(cls, string, format='%H:%M:%S'):
-        """
-        Build a DayTime from a string and a format.
-
-        Args:
-            string:     string parsed according to the specified format
-            format:     defaults to '%H:%M:%S'.
-                        See the library reference manual for formatting codes.
-        
-        Returns a DayTime-object.
-
-        """
-        return cls.from_struct_time(time.strptime(string, format))
-
-    def __add__(self, other, sign=1):
-        # TODO: doing sums with datetime.timedelta-objects
-        if isinstance(other, int) or isinstance(other, float):
-            seconds = self._total_seconds + sign * other
-            return DayTime.from_seconds(seconds, False)
-        elif isinstance(other, DayTime):
-            seconds = self._total_seconds + sign * other._total_seconds
-            return DayTime.from_seconds(seconds, False)
-        else: raise TypeError("unsupported operator for DayTime and {0}".format(
-            other.__class__.__name__))
-
-    def __sub__(self, other):
-        return self.__add__(other, -1)
-
-    def __gt__(self, other):
-        if isinstance(other, int) or isinstance(other, float):
-            return self._total_seconds > other
-        else: return super(DayTime, self).__gt__(other)
-
-    def __ge__(self, other):
-        if isinstance(other, int) or isinstance(other, float):
-            return self._total_seconds >= other
-        else: return super(DayTime, self).__ge__(other)
-
-    def __lt__(self, other):
-        if isinstance(other, int) or isinstance(other, float):
-            return self._total_seconds < other
-        else: return super(DayTime, self).__lt__(other)
-
-    def __le__(self, other):
-        if isinstance(other, int) or isinstance(other, float):
-            return self._total_seconds <= other
-        else: return super(DayTime, self).__le__(other)
-
-    def __eq__(self, other):
-        if isinstance(other, int) or isinstance(other, float):
-            return self._total_seconds == other
-        else: return super(DayTime, self).__eq__(other)
-
-    def __ne__(self, other):
-        if isinstance(other, int) or isinstance(other, float):
-            return self._total_seconds != other
-        else: return super(DayTime, self).__ne__(other)
 
 
 class Interval:
@@ -184,10 +52,11 @@ class Interval:
 
 class DaytimeInterval:
     """
-    Extension of Interval.
+    A more advanced interval-class.
     
     Interval-evaluation based on a list of daytimes.
     """
+    #TODO: reworking this. Take a dict as argument.
     def __init__(self, interval_data):
         """
         Constructor of DaytimeInterval.
@@ -227,11 +96,11 @@ class DaytimeInterval:
         """
         if type(self._interval_data) is int:
             return self._interval_data
-        elif timer.daytime() < self._interval_data[-1][0]:
+        elif DayTime.daytime() < self._interval_data[-1][0]:
             return self._interval_data[0][1]
         else:
             for daytime, interval in self._interval_data:
-                if daytime < timer.daytime(): return interval
+                if daytime < DayTime.daytime(): return interval
 
 
 class Timer:
@@ -247,13 +116,13 @@ class Timer:
                     (defaults to 0.01).
 
     """
-    def __init__(self, interval_obj, snap=False, max_count=None, latency_tolerance=0.01):
+    def __init__(self, intervalobj, snap=False, max_count=None, latency_tolerance=0.01):
         """
         Constructor of Timer.
         
         Args:
-            interval_obj:
-                interval in seconds or an Interval-instance.
+            intervalobj:
+                Interval-instance.
 
             snap:
                 a boolean specifies if the timer-start will be instantly or
@@ -268,8 +137,7 @@ class Timer:
         
         Returns a Timer-instance.
         """
-        if type(interval_obj) is int: interval_obj = Interval(interval_obj)
-        self._interval_obj = interval_obj
+        self._intervalobj = intervalobj
         self._actualize_interval()
         self._snap = snap
         self._max_count = max_count
@@ -278,10 +146,6 @@ class Timer:
         self._count = 0
         self._timelag = None
         self._stopped = False
-
-    def _actualize_interval(self):
-        # TODO: what about snapping if the interval changes!
-        self._interval = self._interval_obj.get(self)
 
     @property
     def count(self):
@@ -299,18 +163,7 @@ class Timer:
     def alive(self):
         return bool(self._stage)
 
-    def now(self):
-        """
-        Returns the actual time in seconds (same as time.time()).
-        """
-        return time.time()
-
-    def daytime(self):
-        """
-        Returns a DayTime-instance, that points to the actual daytime.
-        """
-        return DayTime.from_seconds(self.now())
-
+    @property
     def runtime(self):
         """
         Returns the seconds the actual sequenz-pass is running.
@@ -323,8 +176,13 @@ class Timer:
         adding the value of interval to a staged point of time, that the whole
         thing started at.
         """
-        try: return self.now() - self._stage
-        except TypeError: pass
+        if self.alive: return time.time() - self._stage
+        else: return None
+
+    def _actualize_interval(self):
+        #TODO: what about snapping if the interval changes!
+        #TODO: this method should be part of the Interval-class.
+        self._interval = self._intervalobj.get(self)
 
     def start(self):
         """
@@ -344,10 +202,10 @@ class Timer:
         self._first_time = True
 
         if not self._snap:
-            self._stage = self.now()
+            self._stage = time.time()
             return 0
         else:
-            now = self.now()
+            now = time.time()
             seconds_to_wait = self.interval - now % self.interval
             self._stage = now + seconds_to_wait
             return seconds_to_wait
@@ -383,10 +241,10 @@ class Timer:
             return True
 
         # actual sequenz hasn't finished yet:
-        elif self.now() - self._stage < self._interval: return False
+        elif time.time() - self._stage < self._interval: return False
 
         else:
-            lag = self.runtime() - self._interval
+            lag = self.runtime - self._interval
             self._timelag = None if lag <= self._latency_tolerance else lag
 
             self._actualize_interval()
@@ -404,12 +262,6 @@ class Timer:
         """
         if self._stopped: self.reset()
         return self.alive and not self.count is self._max_count
-
-    def interval_check(self):
-        """
-        Returns True if interval is not 0. False otherwise.
-        """
-        return True if self.interval else False
 
     def reset(self):
         """
@@ -513,9 +365,9 @@ class Sequenz():
 
                  # loop over cmd-list
                 for cmd in self.cmds:
-                    if not cmd.daytime_check(self.timer): continue
+                    if not cmd.daytime_check(self.timer.interval): continue
                     if not cmd.frequenz_check(): continue
-                    time.sleep(cmd.runtime_delay(self.timer))
+                    time.sleep(cmd.runtime_delay(self.timer.runtime))
                     time.sleep(cmd.wait)
                     LOGGER.info('EXECUTE %s.', cmd.__call__.__name__)
                     thread = Thread(target=cmd, args=cmd.args, kwargs=cmd.kwargs)
@@ -591,7 +443,7 @@ class Command():
         self.kwargs = kwargs
         self._count = -1
 
-    def daytime_check(self, timer):
+    def daytime_check(self, interval):
         """
         Checks the cmd's times-attribute.
         
@@ -608,8 +460,8 @@ class Command():
             self._count += 1
             return True
 
-        d = timer.daytime()
-        i = timer.interval
+        d = DayTime.daytime()
+        i = interval
         if any([d >= t and d - t < i for t in self.times]):
             self._count +=1
             return True
@@ -631,14 +483,14 @@ class Command():
         """
         return self._count % self.frequenz == 0
 
-    def runtime_delay(self, timer):
+    def runtime_delay(self, runtime):
         """
         Returns the time that the cmd still has to wait depending on his delay.
         
         Args:
             timer:  a Timer-instance
         """
-        delay = self.delay - timer.runtime()
+        delay = self.delay - runtime
         return delay if delay >= 0 else 0
 
 
@@ -664,7 +516,7 @@ if __name__ == '__main__':
 #    interval = DaytimeInterval(['23:22', 14, '23:30', 20])
     interval = Interval(12)
     timer = Timer(interval, snap=False)
-    daytime = timer.daytime()
+    daytime = DayTime.daytime()
     times = list()
     for x in range(1, 4): times.append((daytime + 60*x).strftime('%H:%M'))
     cmd1 = Command(f, args=['cmd1', 10], join=True)
