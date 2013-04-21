@@ -1,6 +1,6 @@
 from distutils.core import setup
 
-VERSION = "0.1"
+VERSION = "0.2"
 
 setup(
     name = "sequence", 
@@ -8,10 +8,11 @@ setup(
     author = "Thomas Leichtfuss", 
     author_email = "thomaslfuss@gmx.de",
     url = "https://github.com/thomst/sequence",
-    download_url = "https://pypi.python.org/packages/source/t/sequence/sequence-{version}.tar.gz".format(version=VERSION),
+#    download_url = "https://pypi.python.org/packages/source/t/sequence/sequence-{version}.tar.gz".format(version=VERSION),
     description = 'has to be written...',
     long_description = "has to be written as well...",
     py_modules = ["sequence"],
+    install_requires = ['daytime'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',

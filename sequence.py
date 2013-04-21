@@ -12,7 +12,7 @@ import datetime
 from threading import Thread
 from daytime import DayTime
 
-LOGGER = logging.getLogger('sequenz')
+LOGGER = logging.getLogger('sequence')
 
 
 class Timer:
@@ -28,7 +28,7 @@ class Timer:
                     (defaults to 0.01).
 
     """
-    def __init__(self, interval_data, snap=False, max_count=None, latency_tolerance=0.01):
+    def __init__(self, interval_data, max_count=None, snap=False, latency_tolerance=0.01):
         """
         Constructor of Timer.
         
@@ -214,11 +214,11 @@ class DaytimeTimer(Timer):
                 if daytime < now: self._interval = interval
 
 
-class Sequenz():
+class Sequence():
     """
     Runs several commands in a repeated sequenz.
     """
-    def __init__(self, timer, cmds=list(), daemon=False):
+    def __init__(self, timer, cmds=list()):
         """
         Constructor of Sequenz.
         
@@ -230,6 +230,25 @@ class Sequenz():
             cmds:   a list of Command-instances. The way Commands are executed
                     whithin a sequenz depends first on the order of the cmds-list
                     and second on the configuration of each cmd itself.
+        """
+        self.timer = timer
+        self.cmds = cmds
+
+    @property
+    def alive(self):
+        return self._alive
+
+    def add_cmd(self, cmd):
+        """
+        Add a Command-instance.
+        """
+        self.cmds.append(cmd)
+
+    def thread(self, daemon=False):
+        """
+        Start the main-loop in a thread.
+        
+        Args:
             daemon: boolean to specify whether the thread that runs the
                     main-loop should be a daemon or not (This makes a difference
                     in the way signals are handeld. A daemonized thread will be
@@ -241,41 +260,19 @@ class Sequenz():
                     finish after all left cmds in the actual pass will be
                     processed.
         """
-        self.timer = timer
-        self.cmds = cmds
-        self._daemon = daemon
-
-    @property
-    def alive(self):
-        return self.timer.alive
-
-    def add_cmd(self, cmd):
-        """
-        Add a Command-instance.
-        """
-        self.cmds.append(cmd)
-
-    def start(self):
-        """
-        Start the main-loop in a thread.
-        
-        Mind that a non-daemonized thread will not be interrupted by any signal
-        (except SIGKILL). Therefore you have to stop the sequenz on your own via
-        his stop-method.
-        """
-        #TODO: start should take daemon as a kwargs with default to False (not init)
-        # FIXME: With a non-daemonized thread the signals won't be catched
+        #FIXME: With a non-daemonized thread the signals won't be catched
         # anymore after a certain while.
         thread = Thread(target=self.go)
-        thread.daemon = self._daemon
+        thread.daemon = daemon
         thread.start()
 
-    def stop(self):
+    def stop(self, wait=False):
         """
         Will cause the sequenz to stop after finishing his actual pass.
         """
         self.timer.stop()
-#        while self.alive: time.sleep(0.01)
+        if wait:
+            while self.alive: time.sleep(0.01)
 
     def go(self):
         """
@@ -285,7 +282,7 @@ class Sequenz():
         interrupted but the execution of the last cmd will be finished.
         """
         time.sleep(self.timer.start())
-        
+        self._alive = True
         while self.timer.run_check():
 
             # start a new round
@@ -299,6 +296,7 @@ class Sequenz():
                     self.timer.count, self.timer.interval
                     ))
 
+                threads = list()
                  # loop over cmd-list
                 for cmd in self.cmds:
                     if not cmd.daytime_check(self.timer.interval): continue
@@ -309,23 +307,23 @@ class Sequenz():
                     thread = Thread(target=cmd, args=cmd.args, kwargs=cmd.kwargs)
                     thread.start()
                     if cmd.join: thread.join()
+                    threads.append(thread)
                     time.sleep(cmd.stall)
 
 
             time.sleep(0.002)
 
         else:
-            # wait for the last thread to finish if it is not joined:
-            # TODO: instead of try-stm, do: if locals().has_key("thread"):
-            try:
-                while thread.is_alive(): time.sleep(0.01)
-            except UnboundLocalError: pass
+            # check if any thread is still alive and wait for it:
+            if locals().has_key("threads"):
+                while filter(lambda t: t.is_alive(), threads): time.sleep(0.01)
 
             self.timer.reset()
+            self._alive = False
             LOGGER.info('finished')
 
 
-class Command():
+class Cmd():
     """
     Callable with configuration-attributes to be used in a sequenz.
     """
@@ -373,8 +371,7 @@ class Command():
         self.join = join
         self.wait = wait
         self.stall = stall
-        times = times if type(times) == list else [times]
-        self.times = [DayTime.strptime(t, '%H:%M') for t in times]
+        self.times = times
         self.args = args
         self.kwargs = kwargs
         self._count = -1
@@ -428,49 +425,5 @@ class Command():
         """
         delay = self.delay - runtime
         return delay if delay >= 0 else 0
-
-
-
-
-if __name__ == '__main__':
-    import signal, sys
-
-    logformat = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
-    LOGGER = logging.getLogger(str())
-    LOGGER.setLevel(logging.INFO)
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter(logformat))
-    LOGGER.addHandler(handler)
-    LOGGER = logging.getLogger('sequenz')
-
-    def f(cmd, wait):
-        LOGGER = logging.getLogger(cmd)
-        LOGGER.info('start execution %s' % cmd)
-        time.sleep(wait)
-        LOGGER.info('end execution %s' % cmd)
-
-#    interval = DaytimeInterval(['23:22', 14, '23:30', 20])
-    interval = Interval(12)
-    timer = Timer(interval, snap=False)
-    daytime = DayTime.daytime()
-    times = list()
-    for x in range(1, 4): times.append((daytime + 60*x).strftime('%H:%M'))
-    cmd1 = Command(f, args=['cmd1', 10], join=True)
-    cmd2 = Command(f, args=['cmd2', 10])
-    sequenz = Sequenz(timer, [cmd1, cmd2])
-
-    def exit(signal, frame=None):
-        LOGGER.info('caught %s' % signal)
-        sequenz.stop()
-
-    signal.signal(signal.SIGTERM, exit)
-
-    sequenz.start()
-    try:
-        while sequenz.alive: time.sleep(0.5)
-    except KeyboardInterrupt:
-        exit('KeyboardInterrupt')
-
-    logging.shutdown()
 
 
