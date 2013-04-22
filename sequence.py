@@ -55,13 +55,13 @@ class Timer:
         self._max_count = max_count
         self._latency_tolerance = latency_tolerance
         self._stage = None
-        self._count = 0
+        self._counter = 0
         self._timelag = None
         self._stopped = False
 
     @property
-    def count(self):
-        return self._count
+    def counter(self):
+        return self._counter
 
     @property
     def interval(self):
@@ -153,7 +153,7 @@ class Timer:
         # Because the timer was started outside the loop, the first check
         # must return True.
         elif self._first_time:
-            self._count += 1
+            self._counter += 1
             self._first_time = False
             return True
 
@@ -167,7 +167,7 @@ class Timer:
             self.actualize()
             if not self.interval: return False
 
-            self._count += 1
+            self._counter += 1
             self._stage += self.interval
             return True
 
@@ -178,13 +178,13 @@ class Timer:
         Returns a boolean.
         """
         if self._stopped: self.reset()
-        return self.alive and not self.count is self._max_count
+        return self.alive and not self.counter is self._max_count
 
     def reset(self):
         """
         Reset all values.
         """
-        self._count = 0
+        self._counter = 0
         self._stage = None
         self._stopped = False
 
@@ -303,7 +303,7 @@ class Sequence:
                     LOGGER.error('TIMELAG: %s sec!' % round(self.timer.timelag, 2))
 
                 LOGGER.info('ROUND {0} (INTERVAL {1})'.format(
-                    self.timer.count, self.timer.interval
+                    self.timer.counter, self.timer.interval
                     ))
 
                 threads = list()
@@ -483,7 +483,7 @@ class Cmd(BaseCmd):
     @count
     def check(self, sequence):
         return  self._check_times(sequence.timer.interval) and \
-                self._check_nthpart(sequence.timer.count)
+                self._check_nthpart(sequence.timer.counter)
 
     def preexec(self, sequence):
         return self._wait + self._check_delay(sequence.timer.runtime)
@@ -511,7 +511,7 @@ class Cmd(BaseCmd):
         Checks if the cmd will run this loop depending on nthpart.
 
         Args:
-            counter:  sequence.timer.count
+            counter:  sequence.timer.counter
 
         Returns a boolean.
         """

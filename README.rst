@@ -46,7 +46,7 @@ How to use? ::
 
 Reporting Bugs
 --------------
-Please report the bugs at github issue tracker.
+Please report bugs at github issue tracker:
 https://github.com/thomst/sequence/issues
 
 
