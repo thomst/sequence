@@ -9,8 +9,8 @@ setup(
     author_email = "thomaslfuss@gmx.de",
     url = "https://github.com/thomst/sequence",
 #    download_url = "https://pypi.python.org/packages/source/t/sequence/sequence-{version}.tar.gz".format(version=VERSION),
-    description = 'has to be written...',
-    long_description = "has to be written as well...",
+    description = 'A Python module for looping over a sequence of commands with a focus on high configurability.',
+#    long_description = "has to be written...",
     py_modules = ["sequence"],
     install_requires = ['daytime'],
     classifiers=[
