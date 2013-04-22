@@ -214,7 +214,7 @@ class DaytimeTimer(Timer):
                 if daytime < now: self._interval = interval
 
 
-class Sequence():
+class Sequence:
     """
     Runs several commands in a repeated sequenz.
     """
@@ -227,9 +227,19 @@ class Sequence():
                     on the timer (like the interval of a sequenz or the maximal
                     count of passing through it).
             
-            cmds:   a list of Command-instances. The way Commands are executed
-                    whithin a sequenz depends first on the order of the cmds-list
-                    and second on the configuration of each cmd itself.
+            cmds:   a list of callables that will be called in the order of the
+                    list. They also have some extra attributes and methods:
+                    cmd.args:       args that are passed to cmd when it is called.
+                    cmd.kwargs:     kwargs that are passed to cmd.
+                    cmd.join:       boolean that specifies whether the thread in
+                                    which cmd is called should be joined.
+                    cmd.check:      method to check wether the cmd should be
+                                    called at all. Returns a boolean.
+                    cmd.preexec:    method that returns the time in seconds the
+                                    sequence should wait before calling cmd.
+                    cmd.postexec:   method that returns the time in seconds the
+                                    sequence should wait before going on to the
+                                    next cmd.
         """
         self.timer = timer
         self.cmds = cmds
@@ -299,16 +309,16 @@ class Sequence():
                 threads = list()
                  # loop over cmd-list
                 for cmd in self.cmds:
-                    if not cmd.daytime_check(self.timer.interval): continue
-                    if not cmd.frequenz_check(): continue
-                    time.sleep(cmd.runtime_delay(self.timer.runtime))
-                    time.sleep(cmd.wait)
-                    LOGGER.info('EXECUTE %s.', cmd.__call__.__name__)
+                    if not cmd.check(self): continue
+                    time.sleep(cmd.preexec(self))
+
                     thread = Thread(target=cmd, args=cmd.args, kwargs=cmd.kwargs)
+                    LOGGER.info('RUN %s.', cmd.__name__)
                     thread.start()
                     if cmd.join: thread.join()
                     threads.append(thread)
-                    time.sleep(cmd.stall)
+
+                    time.sleep(cmd.postexec(self))
 
 
             time.sleep(0.002)
@@ -323,22 +333,134 @@ class Sequence():
             LOGGER.info('finished')
 
 
-class Cmd():
+class BaseCmd(object):
     """
-    Callable with configuration-attributes to be used in a sequenz.
+    Base-Class for callables used in a sequenz.
     """
-    def __init__(self, cmd=None, delay = 0, frequenz = 1, times=list(),
-    join=False, wait=0, stall = 0, args=list(), kwargs=dict()):
+    def __init__(self, cmd, args=list(), kwargs=dict(), join=False):
         """
         Constructor of Command.
         
         Args:
             cmd:
                 a callable that will be run within the sequenz
+            join:
+                If join is True, cmd will be called in a joined thread. That
+                means the sequence will wait for the cmd to be executed.
+                Defaults to False.
+            args:
+                list of positional arguments that will be passed to the cmd.
+            kwargs:
+                dictonary of keyword-arguments that will be passed to the cmd.
+        """
+        self._cmd = cmd
+        self.__name__ = cmd.__name__
+        self._args = args
+        self._kwargs = kwargs
+        self._join = join
+        self._counter = 0
+
+    def __call__(self, *args, **kwargs):
+        return self._cmd(*args, **kwargs)
+
+    @property
+    def join(self):
+        return self._join
+
+    @property
+    def args(self):
+        return self._args
+
+    @property
+    def kwargs(self):
+        return self._kwargs
+
+    @property
+    def counter(self):
+        return self._counter
+
+    @staticmethod
+    def count(func):
+        """This could be used as a decorator for the check-method to count the
+        calls that have been made to the cmd.
+        """
+        def new(self, *args, **kwargs):
+            boolean = func(self, *args, **kwargs)
+            if boolean: self._counter += 1
+            return boolean
+        return new
+
+    #TODO: make the decorator also available in this class
+    def check(self, sequence):
+        """This is a hook that is called every loop for every cmd.
+        If it returns False the execution will be skipped.
+        
+        Args:
+            sequence:   The sequence will pass itself to the check-, preexec-
+                        and postexec-methods. So you have full access to the
+                        timer, the sequence and through sequence.cmd all other
+                        cmds.
+
+        Returns a boolean.
+        """
+        return True
+
+    def preexec(self, sequence):
+        """This is a hook that is called every loop for every cmd.
+        It stalles the execution of cmd for as many seconds as it returns.
+
+        Args:
+            sequence:   a sequence-instance.
+
+        Returns an integer or float.
+        """
+        return 0
+
+    def postexec(self, sequence):
+        """This is a hook that is called every loop for every cmd.
+        It stalles the execution of following cmds for as many seconds as it returns.
+
+        Args:
+            sequence:   a sequence-instance.
+
+        Returns an integer or float.
+        """
+        return 0
+
+
+
+class Cmd(BaseCmd):
+    """
+    More advanced class for callables for a sequence.
+    """
+    count = BaseCmd.count
+    #TODO: maxcount after that the cmd will be removed from the list
+    def __init__(self, cmd, join=False, args=list(), kwargs=dict(), wait=0,
+                    stall = 0, delay = 0, nthpart = 1, times=list()):
+        """
+        Constructor of Command.
+        
+        Args:
+            cmd:
+                a callable that will be run within the sequenz
+            join:
+                If join is True, cmd will be called in a joined thread. That
+                means the sequence will wait for the cmd to be executed.
+                Defaults to False.
+            args:
+                list of positional arguments that will be passed to the cmd.
+            kwargs:
+                dictonary of keyword-arguments that will be passed to the cmd.
+            wait:
+                time in seconds the cmd-call will be put back when his moment
+                has actually came.
+            stall:
+                time in seconds that the next possible execution of the cmd that
+                comes next will be stalled after running the current cmd.
             delay:
                 the earliest point of time in seconds that the cmd will be
                 run within the sequenz
-            frequenz:
+            nthpart:
                 cmd will be run every x time of the calls that usually would be
                 made for cmd. Default is 1 (cmd will be called every time).
             times:
@@ -350,80 +472,59 @@ class Cmd():
                 the cmd-call will take place only for the first daytime.
                 Is there though only one daytime specified, the call would take
                 place every second day.)
-            join:
-                If join is True, the thread that runs the cmd will be joined
-                (means the main-thread will wait for execution). Defaults to
-                False.
-            wait:
-                time in seconds the cmd-call will be put back when his moment
-                has actually came.
-            stall:
-                time in seconds that the next possible execution of the cmd that
-                comes next will be stalled after running the current cmd.
-            args:
-                list of positional arguments that will be passed to the cmd.
-            kwargs:
-                dictonary of keyword-arguments that will be passed to the cmd.
         """
-        self.__call__ = cmd
-        self.delay = delay
-        self.frequenz = frequenz
-        self.join = join
-        self.wait = wait
-        self.stall = stall
-        self.times = times
-        self.args = args
-        self.kwargs = kwargs
-        self._count = -1
+        super(Cmd, self).__init__(cmd, args, kwargs, join)
+        self._wait = wait
+        self._stall = stall
+        self._delay = delay
+        self._nthpart = nthpart
+        self._times = times
 
-    def daytime_check(self, interval):
+    @count
+    def check(self, sequence):
+        return  self._check_times(sequence.timer.interval) and \
+                self._check_nthpart(sequence.timer.count)
+
+    def preexec(self, sequence):
+        return self._wait + self._check_delay(sequence.timer.runtime)
+
+    def postexec(self, sequence):
+        return self._stall
+
+    def _check_times(self, interval):
         """
-        Checks the cmd's times-attribute.
-        
-        Determines whether the cmd should be run next sequenz, and increase his
-        count by one if so.
-        
+        Checks if the cmd will run this loop depending on times.
+
         Args:
-            timer:  a Timer-instance
-        
+            interval:  sequence.timer.interval
+
         Returns a boolean.
         """
-
-        if not self.times:
-            self._count += 1
-            return True
-
+        if not self._times: return True
         d = DayTime.daytime()
         i = interval
-        if any([d >= t and d - t < i for t in self.times]):
-            self._count +=1
-            return True
-
+        if any([d >= t and d - t < i for t in self._times]): return True
         else: return False
 
-    def frequenz_check(self):
+    def _check_nthpart(self, counter):
         """
-        Checks the cmd's frequenz-attribute.
-        
-        Determines whether a cmd should be run by means of his count and the
-        specified frequenz for this cmd.
-        Note that this check should be run after the daytime-check. Think about
-        these two checks like this. daytime_check determines when a cmd would be
-        "normally" called, while the frequenz_check determines which times of
-        the "normally" calls to the cmd, the cmd should be actually called.
-        
+        Checks if the cmd will run this loop depending on nthpart.
+
+        Args:
+            counter:  sequence.timer.count
+
         Returns a boolean.
         """
-        return self._count % self.frequenz == 0
+        return bool(counter % self._nthpart == 0)
 
-    def runtime_delay(self, runtime):
+    def _check_delay(self, runtime):
         """
         Returns the time that the cmd still has to wait depending on his delay.
         
         Args:
             timer:  a Timer-instance
         """
-        delay = self.delay - runtime
-        return delay if delay >= 0 else 0
+        delay = self._delay - runtime
+        return delay if delay > 0 else 0
 
 

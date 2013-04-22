@@ -1,7 +1,7 @@
 sequence
 =========
 
-A Python module for looping over a sequence of commands with a focus on high configurability.
+A Python module for looping over a sequence of commands with a focus on high configurability and extensibility.
 
 
 

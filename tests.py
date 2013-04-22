@@ -62,7 +62,7 @@ class TestSequence(unittest.TestCase):
         self.cmd0 = Cmd(cmd0)
         self.cmd1 = Cmd(cmd1, args=[self.wait1], join=True, stall=0.5, wait=0.2)
         self.cmd2 = Cmd(cmd2, args=[self.wait2], wait=1)
-        self.cmd3 = Cmd(cmd3, args=[self.wait3], times=times, delay=self.cmd1.wait + self.wait1 + self.cmd1.stall + 1)
+        self.cmd3 = Cmd(cmd3, args=[self.wait3], times=times, delay=self.cmd1._wait + self.wait1 + self.cmd1._stall + 1)
 
         sequence = Sequence(Timer(self.interval), [self.cmd0, self.cmd1, self.cmd2, self.cmd3])
 
@@ -91,21 +91,23 @@ class TestSequence(unittest.TestCase):
         times3 = [t.as_seconds for t in self.output3]
 
         self.assertAlmostEqual(times1[0]+self.wait1,times1[1], 1)
-        self.assertAlmostEqual(times1[1]+self.cmd1.stall+self.cmd2.wait,times2[0], 1)
+        self.assertAlmostEqual(times1[1]+self.cmd1._stall+self.cmd2._wait,times2[0], 1)
         self.assertAlmostEqual(times2[0]+self.wait2, times2[1], 1)
-        self.assertAlmostEqual(times0[0]+self.interval, times1[2]-self.cmd1.wait, 1)
+        self.assertAlmostEqual(times0[0]+self.interval, times1[2]-self.cmd1._wait, 1)
         self.assertAlmostEqual(times1[2]+self.wait1,times1[3], 1)
-        self.assertAlmostEqual(times1[3]+self.cmd1.stall+self.cmd2.wait,times2[2], 1)
-        self.assertAlmostEqual(times1[-2] + self.wait1 + self.cmd1.stall + self.cmd2.wait + self.wait2, times2[-1], 1)
+        self.assertAlmostEqual(times1[3]+self.cmd1._stall+self.cmd2._wait,times2[2], 1)
+        self.assertAlmostEqual(times1[-2] + self.wait1 + self.cmd1._stall + self.cmd2._wait + self.wait2, times2[-1], 1)
 
-        self.assertGreater(times3[0], self.cmd3.times[0])
-        self.assertGreater(times3[2], self.cmd3.times[1])
+        self.assertGreater(times3[0], self.cmd3._times[0])
+        self.assertGreater(times3[2], self.cmd3._times[1])
 
         #find the appropriate start-round-time
         for t in times0:
             if t > times3[0]: break
             time = t
-        self.assertAlmostEqual(time + self.cmd3.delay, times3[0], 1)
+        self.assertAlmostEqual(time + self.cmd3._delay, times3[0], 1)
+
+        self.assertEqual(self.cmd0.counter, len(times0))
 
 
 if __name__ == '__main__':
