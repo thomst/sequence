@@ -287,15 +287,10 @@ class Sequence:
                  # loop over cmd-list
                 for cmd in self.cmds:
                     if not cmd.check(self): continue
-                    time.sleep(cmd.preexec(self))
-
-                    thread = Thread(target=cmd, args=cmd.args, kwargs=cmd.kwargs)
-                    LOGGER.info('RUN %s.', cmd.__name__)
+                    thread = Thread(target=cmd, args=[self] + cmd.args, kwargs=cmd.kwargs)
                     thread.start()
                     if cmd.join: thread.join()
                     threads.append(thread)
-
-                    time.sleep(cmd.postexec(self))
 
 
             time.sleep(0.002)
@@ -331,9 +326,14 @@ class BaseCmd(object):
         self._join = join
         self._counter = 0
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, sequence, *args, **kwargs):
         self._counter += 1
-        return self._cmd(*args, **kwargs)
+        time.sleep(self.preexec(sequence))
+        LOGGER.info('RUN %s.', self._cmd.__name__)
+        rtn = self._cmd(*args, **kwargs)
+        LOGGER.info('DONE %s.', self._cmd.__name__)
+        time.sleep(self.postexec(sequence))
+        return rtn
 
     @property
     def join(self):
