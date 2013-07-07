@@ -230,26 +230,21 @@ class Sequence:
         cmd._sequence = self
         self.cmds.append(cmd)
 
-    def thread(self, daemon=False):
+    def start(self):
         """
-        Start the main-loop in a :obj:`threading.Thread`.
-
-        :arg bool daemon:   If True the thread will be daemonized.
+        Start the main-loop.
 
         .. Notice::
+            On interruption the sequence will at least finish processing the
+            actual command.
+            Starting a sequence as a non-daemonized :obj:`threading.Thread`
+            protects the sequence from signals. Catch them on your own and stop
+            the sequence by :meth:`Sequence.stop`. This will guarantee that the
+            sequence will finish its actual pass.
             A daemonized :obj:`threading.Thread` will be interrupted instantly
-            by TERM-SIG (and so will all actually processed commands) while a
-            not daemonized thread won't be interrupted at all.
-            If you wish a sequence that finishes his last pass on TERM-SIG,
-            use a not daemonized thread and call :meth:`stop` on catching the
-            signal. This causes the thread to end when all commands of the
-            lasting pass are processed.
+            by TERM-SIG (and so will all actually processed commands).
         """
-        #FIXME: With a non-daemonized thread the signals won't be catched
-        # anymore after a certain while.
-        thread = Thread(target=self.go)
-        thread.daemon = daemon
-        thread.start()
+        self.run()
 
     def stop(self, wait=False):
         """
@@ -263,12 +258,9 @@ class Sequence:
         if wait:
             while self.alive: time.sleep(0.01)
 
-    def go(self):
+    def run(self):
         """
-        Start the sequenz as a non-threaded loop.
-
-        On interruption a non-threaded sequence will at least finish processing
-        the actual command.
+        Run the main-loop.
         """
         time.sleep(self.timer.start())
         self._alive = True

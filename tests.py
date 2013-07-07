@@ -3,6 +3,7 @@ import datetime
 import time
 import logging
 import signal
+from threading import Thread
 from daytime import DayTime
 from sequence import Timer
 from sequence import Sequence
@@ -67,7 +68,8 @@ class TestSequence(unittest.TestCase):
         sequence = Sequence(Timer(self.interval), [self.cmd0, self.cmd1, self.cmd2, self.cmd3])
 
         #start as non-daemonized thread
-        sequence.thread(daemon=False)
+        thread = Thread(target=sequence.run)
+        thread.start()
 
         #stop after <self.count> finished sequences and one started
         try: time.sleep(self.interval * self.count + 2)
