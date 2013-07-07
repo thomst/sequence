@@ -1,6 +1,9 @@
+import os
 from distutils.core import setup
 
-VERSION = "0.3"
+#import sequence
+#import sequence here will raise ImportError for not installed dependecies...
+VERSION = '0.3'
 
 setup(
     name = "sequence", 
@@ -8,9 +11,9 @@ setup(
     author = "Thomas Leichtfuss", 
     author_email = "thomaslfuss@gmx.de",
     url = "https://github.com/thomst/sequence",
-#    download_url = "https://pypi.python.org/packages/source/t/sequence/sequence-{version}.tar.gz".format(version=VERSION),
+    download_url = "https://pypi.python.org/packages/source/s/sequence/sequence-{version}.tar.gz".format(version=VERSION),
     description = 'A Python module for looping over a sequence of commands with a focus on high configurability and extensibility.',
-#    long_description = "has to be written...",
+    long_description = open('README.rst').read() if os.path.isfile('README.rst') else str(),
     py_modules = ["sequence"],
     install_requires = ['daytime'],
     classifiers=[
