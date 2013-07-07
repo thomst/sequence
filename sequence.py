@@ -213,7 +213,8 @@ class Sequence:
         :keyword list cmds:     list of :class:`Cmd`-objects
         """
         self.timer = timer
-        self.cmds = cmds
+        self.cmds = list()
+        for cmd in cmds: self.add_cmd(cmd)
 
     @property
     def alive(self):
@@ -226,6 +227,7 @@ class Sequence:
         """
         Add a :obj:`Cmd`-object.
         """
+        cmd._sequence = self
         self.cmds.append(cmd)
 
     def thread(self, daemon=False):
@@ -286,10 +288,12 @@ class Sequence:
                 threads = list()
                  # loop over cmd-list
                 for cmd in self.cmds:
-                    if not cmd.check(self): continue
-                    thread = Thread(target=cmd, args=[self] + cmd.args, kwargs=cmd.kwargs)
+                    if not cmd.check(): continue
+                    thread = Thread(target=cmd)
                     thread.start()
                     if cmd.join: thread.join()
+
+                    time.sleep(cmd.postexec())
                     threads.append(thread)
 
 
@@ -326,14 +330,21 @@ class BaseCmd(object):
         self._join = join
         self._counter = 0
 
-    def __call__(self, sequence, *args, **kwargs):
+    def __call__(self):
         self._counter += 1
-        time.sleep(self.preexec(sequence))
-        LOGGER.info('RUN %s.', self._cmd.__name__)
-        rtn = self._cmd(*args, **kwargs)
-        LOGGER.info('DONE %s.', self._cmd.__name__)
-        time.sleep(self.postexec(sequence))
-        return rtn
+
+        time.sleep(self.preexec())
+
+        LOGGER.info('%s - RUN', self._cmd.__name__)
+        self._cmd(*self.args, **self.kwargs)
+        LOGGER.info('%s - DONE', self._cmd.__name__)
+
+    @property
+    def sequence(self):
+        """
+        :obj:`Sequence`; added by :meth:`Sequence.add_cmd`
+        """
+        return self._sequence
 
     @property
     def join(self):
@@ -352,39 +363,35 @@ class BaseCmd(object):
         """Times a :obj:`BaseCmd` was called."""
         return self._counter
 
-    def check(self, sequence):
+    def check(self):
         """
         Used by :obj:`Sequence` to check each pass if :obj:`BaseCmd` should
         be called.
 
-        :obj:`Sequence` will pass itself to :meth:`check`, :meth:`preexec` and
-        :meth:`postexec` to provide those methods access to the applied
-        :attr:`Sequence.timer` and :attr:`Sequence.cmds`.
-
-        :args Sequence sequence:    :obj:`Sequence`-object.
         :rtype:                     bool.
         """
         return True
 
-    def preexec(self, sequence):
+    def preexec(self):
         """
-        Called by :obj:`Sequence` each pass *before* processing :obj:`BaseCmd`.
+        Called within :meth:`BaseCmd.__call__` just *before* processing the cmd.
+        (This is not called within :meth:`Sequence.go` to not stall the execution
+        of following :obj:`BaseCmd`s when running this :obj:`BaseCmd` as non-joined
+        :obj:`threading.Thread`.)
         The return-value will be passed to :meth:`time.sleep` to possibly stall
-        the execution of :obj:`BaseCmd`.
+        the execution of :attr:`BaseCmd._cmd`.
 
-        :args Sequence sequence:    :obj:`Sequence`-object.
         :returns:                   int or float. ``0`` if execution should not
                                     been stalled.
         """
         return 0
 
-    def postexec(self, sequence):
+    def postexec(self):
         """
         Called by :obj:`Sequence` each pass *after* processing :obj:`BaseCmd`.
         The return-value will be passed to :meth:`time.sleep` to possibly stall
         the execution of following :obj:`BaseCmd`.
 
-        :args Sequence sequence:    :obj:`Sequence`-object.
         :returns:                   int or float. ``0`` if execution should not
                                     been stalled.
         """
@@ -424,17 +431,16 @@ class Cmd(BaseCmd):
         self._nthtime = nthtime
         self._times = times
 
-    def check(self, sequence):
-        return  self._check_times(sequence.timer.interval) and \
-                self._check_nthtime(sequence.timer.counter)
+    def check(self):
+        return  self._check_times() and self._check_nthtime()
 
-    def preexec(self, sequence):
-        return self._wait + self._check_delay(sequence.timer.runtime)
+    def preexec(self):
+        return self._wait + self._check_delay()
 
-    def postexec(self, sequence):
+    def postexec(self):
         return self._stall
 
-    def _check_times(self, interval):
+    def _check_times(self):
         """
         Checks for execution with regard to *times*.
 
@@ -443,20 +449,20 @@ class Cmd(BaseCmd):
         """
         if not self._times: return True
         d = DayTime.daytime()
-        i = interval
+        i = self.sequence.timer.interval
         if any([d >= t and d - t < i for t in self._times]): return True
         else: return False
 
-    def _check_nthtime(self, counter):
+    def _check_nthtime(self):
         """
         Checks for execution with regard to *nthtime*.
 
         :arg int counter:      :attr:`Sequence.timer.counter`
         :returns:               bool
         """
-        return bool(counter % self._nthtime == 0)
+        return bool(self.sequence.timer.counter % self._nthtime == 0)
 
-    def _check_delay(self, runtime):
+    def _check_delay(self):
         """
         Checks the time till execution with regard to *delay*.
 
@@ -464,7 +470,7 @@ class Cmd(BaseCmd):
         :returns:               time till execution
         :rtype:                 bool
         """
-        delay = self._delay - runtime
+        delay = self._delay - self.sequence.timer.runtime
         return delay if delay > 0 else 0
 
 
