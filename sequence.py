@@ -5,7 +5,7 @@ import datetime
 from threading import Thread
 from daytime import DayTime
 
-__version__ = '0.3'
+__version__ = '0.3.1'
 
 LOGGER = logging.getLogger('sequence')
 
