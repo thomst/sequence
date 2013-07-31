@@ -6,16 +6,27 @@ import signal
 from threading import Thread
 from daytime import DayTime
 from sequence import Timer
+from sequence import DaytimeTimer
 from sequence import Sequence
 from sequence import Cmd
 
 
 #TODO: tests for the DayTimeTimer...
 
-class TestSequence(unittest.TestCase):
+class Mixin:
     def setUp(self):
-        logger = self.init_logger()
+        self.initlogger()
+        self.inittimer()
+        self.initcmds()
+        self.initsequence()
+        self.startsequence()
 
+    def inittimer(self):
+        self.interval = 6
+        self.count = 3
+        self.timer = Timer(self.interval)
+
+    def initcmds(self):
         self.output0 = list()
         self.output1 = list()
         self.output2 = list()
@@ -51,8 +62,6 @@ class TestSequence(unittest.TestCase):
             self.output3.append(DayTime.daytime())
             logger.info(self.output3[-1].strftime('%T.%f'))
 
-        self.interval = 6
-        self.count = 3
 
         self.wait1 = 2
         self.wait2 = 4
@@ -65,19 +74,22 @@ class TestSequence(unittest.TestCase):
         self.cmd2 = Cmd(cmd2, args=[self.wait2], wait=1)
         self.cmd3 = Cmd(cmd3, args=[self.wait3], times=times, delay=self.cmd1._wait + self.wait1 + self.cmd1._stall + 1)
 
-        sequence = Sequence(Timer(self.interval), [self.cmd0, self.cmd1, self.cmd2, self.cmd3])
+    def initsequence(self):
+        self.sequence = Sequence(self.timer, [self.cmd0, self.cmd1, self.cmd2, self.cmd3])
 
+    def startsequence(self):
+        logger = logging.getLogger('startandstop')
         #start as non-daemonized thread
-        thread = Thread(target=sequence.run)
+        thread = Thread(target=self.sequence.run)
         thread.start()
 
         #stop after <self.count> finished sequences and one started
         try: time.sleep(self.interval * self.count + 2)
         except KeyboardInterrupt: logger.error('KeyboardInterrupt')
-        sequence.stop(True)
+        self.sequence.stop(True)
         logging.shutdown()
 
-    def init_logger(self):
+    def initlogger(self):
         logformat = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
         LOGGER = logging.getLogger(str())
         LOGGER.setLevel(logging.INFO)
@@ -86,6 +98,7 @@ class TestSequence(unittest.TestCase):
         LOGGER.addHandler(handler)
         return logging.getLogger('sequence')
 
+class TestSequence(Mixin, unittest.TestCase):
     def test_sequence(self):
         times0 = [t.as_seconds for t in self.output0]
         times1 = [t.as_seconds for t in self.output1]
@@ -110,6 +123,20 @@ class TestSequence(unittest.TestCase):
         self.assertAlmostEqual(time + self.cmd3._delay, times3[0], 1)
 
         self.assertEqual(self.cmd0.counter, len(times0))
+
+class TestDaytimeTimer(Mixin, unittest.TestCase):
+    def inittimer(self):
+        self.interval = 6
+        self.count = 4
+        data = list()
+        times = list()
+        daytime = DayTime.daytime()
+        for x in range(4): times.append(daytime + 10*x)
+        for i, t in enumerate(times): data.append((t, self.interval+i))
+        self.timer = DaytimeTimer(data=data)
+
+    def test_daytimetimer(self):
+        pass
 
 
 if __name__ == '__main__':

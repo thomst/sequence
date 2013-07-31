@@ -5,12 +5,12 @@ import datetime
 from threading import Thread
 from daytime import DayTime
 
-__version__ = '0.3.1'
+__version__ = '0.3.2'
 
 LOGGER = logging.getLogger('sequence')
 
 
-class Timer:
+class Timer(object):
     """
     Provides timer-facilities regarding to the needs of :class:`Sequence`.
     """
@@ -194,8 +194,8 @@ class DaytimeTimer(Timer):
         """Actualizes the :attr:`Timer.interval` based on the actual daytime.
         """
         now = DayTime.daytime()
-        if now < self._data[-1][0]:
-            self._interval = self._data[0][1]
+        if now < self._data[0][0]:
+            self._interval = self._data[-1][1]
         else:
             for time, interval in self._data:
                 if time < now: self._interval = interval
