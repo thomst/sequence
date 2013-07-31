@@ -3,7 +3,7 @@ from distutils.core import setup
 
 #import sequence
 #import sequence here will raise ImportError for not installed dependecies...
-VERSION = '0.3.2'
+VERSION = '0.3.3'
 
 setup(
     name = "sequence", 

@@ -5,7 +5,7 @@ import datetime
 from threading import Thread
 from daytime import DayTime
 
-__version__ = '0.3.2'
+__version__ = '0.3.3'
 
 LOGGER = logging.getLogger('sequence')
 
@@ -174,7 +174,7 @@ class DaytimeTimer(Timer):
     """
     Extends :class:`Timer`.
     """
-    def __init__(self, data, *args, **kwargs):
+    def __init__(self, data, max_count=None, snap=False, latency_tolerance=0.01):
         """
         :arg list data:         List of tuples, each with a :obj:`datetime.time`
                                 and an :obj:`int` as *interval*. From each
@@ -188,7 +188,8 @@ class DaytimeTimer(Timer):
         """
         self._data = data
         self._data.sort()
-        super(DaytimeTimer, self).__init__(self, *args, **kwargs)
+        super(DaytimeTimer, self).__init__(data, max_count=max_count,
+            snap=snap, latency_tolerance=latency_tolerance)
 
     def actualize(self):
         """Actualizes the :attr:`Timer.interval` based on the actual daytime.
