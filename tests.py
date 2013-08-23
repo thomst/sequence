@@ -4,7 +4,7 @@ import time
 import logging
 import signal
 from threading import Thread
-from daytime import DayTime
+from daytime import Daytime
 from sequence import Timer
 from sequence import DaytimeTimer
 from sequence import Sequence
@@ -35,31 +35,31 @@ class Mixin:
         # this is for catching the start-times of every round
         def cmd0():
             logger = logging.getLogger('cmd0')
-            self.output0.append(DayTime.daytime())
+            self.output0.append(Daytime.daytime())
             logger.info(self.output0[-1].strftime('%T.%f'))
 
         def cmd1(wait):
             logger = logging.getLogger('cmd1')
-            self.output1.append(DayTime.daytime())
+            self.output1.append(Daytime.daytime())
             logger.info(self.output1[-1].strftime('%T.%f'))
             time.sleep(wait)
-            self.output1.append(DayTime.daytime())
+            self.output1.append(Daytime.daytime())
             logger.info(self.output1[-1].strftime('%T.%f'))
 
         def cmd2(wait):
             logger = logging.getLogger('cmd2')
-            self.output2.append(DayTime.daytime())
+            self.output2.append(Daytime.daytime())
             logger.info(self.output2[-1].strftime('%T.%f'))
             time.sleep(wait)
-            self.output2.append(DayTime.daytime())
+            self.output2.append(Daytime.daytime())
             logger.info(self.output2[-1].strftime('%T.%f'))
 
         def cmd3(wait):
             logger = logging.getLogger('cmd3')
-            self.output3.append(DayTime.daytime())
+            self.output3.append(Daytime.daytime())
             logger.info(self.output3[-1].strftime('%T.%f'))
             time.sleep(wait)
-            self.output3.append(DayTime.daytime())
+            self.output3.append(Daytime.daytime())
             logger.info(self.output3[-1].strftime('%T.%f'))
 
 
@@ -67,7 +67,7 @@ class Mixin:
         self.wait2 = 4
         self.wait3 = 1
         times = list()
-        daytime = DayTime.daytime()
+        daytime = Daytime.daytime()
         for x in [1,3]: times.append((daytime + self.interval*x))
         self.cmd0 = Cmd(cmd0)
         self.cmd1 = Cmd(cmd1, args=[self.wait1], join=True, stall=0.5, wait=0.2)
@@ -130,7 +130,7 @@ class TestDaytimeTimer(Mixin, unittest.TestCase):
         self.count = 4
         data = list()
         times = list()
-        daytime = DayTime.daytime()
+        daytime = Daytime.daytime()
         for x in range(4): times.append(daytime + 10*x)
         for i, t in enumerate(times): data.append((t, self.interval+i))
         self.timer = DaytimeTimer(data=data)

@@ -3,9 +3,9 @@ import time
 import logging
 import datetime
 from threading import Thread
-from daytime import DayTime
+from daytime import Daytime
 
-__version__ = '0.3.3'
+__version__ = '0.3.4'
 
 LOGGER = logging.getLogger('sequence')
 
@@ -194,7 +194,7 @@ class DaytimeTimer(Timer):
     def actualize(self):
         """Actualizes the :attr:`Timer.interval` based on the actual daytime.
         """
-        now = DayTime.daytime()
+        now = Daytime.daytime()
         if now < self._data[0][0]:
             self._interval = self._data[-1][1]
         else:
@@ -441,7 +441,7 @@ class Cmd(BaseCmd):
         :returns:               bool
         """
         if not self._times: return True
-        d = DayTime.daytime()
+        d = Daytime.daytime()
         i = self.sequence.timer.interval
         if any([d >= t and d - t < i for t in self._times]): return True
         else: return False
